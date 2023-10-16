@@ -43,14 +43,25 @@ for f in files:
         else:
             output_chunks.append(chunk)
 
+    chunk_file_dir = os.path.join(CHUNK_DIR, f)
+    ds_file_dir = os.path.join(DS_DIR, f)
+    os.makedirs(chunk_file_dir, exist_ok=True)
+    os.makedirs(ds_file_dir, exist_ok=True)
+
+    for file in os.listdir(chunk_file_dir):
+        os.remove(os.path.join(chunk_file_dir, file))
+
+    for file in os.listdir(ds_file_dir):
+        os.remove(os.path.join(ds_file_dir, file))
+
     # Process each chunk with your parameters
     print(f'  Process chunks')
     output_chunks_fn = []
     output_chunks_len = []
     output_ds = None
-    os.makedirs(CHUNK_DIR + f, exist_ok=True)
+
     for i, chunk in enumerate(output_chunks):
-        output_chunks_fn.append(CHUNK_DIR + f + '/chunk{0}{1}'.format(i, FILE_FORMAT))
+        output_chunks_fn.append(chunk_file_dir + '/chunk{0}{1}'.format(i, FILE_FORMAT))
         output_chunks_len.append(len(chunk))
         print('  Exporting chunk{0}. Len {1}'.format(output_chunks_fn[-1], output_chunks_len[-1]))
         chunk.export(
@@ -70,4 +81,4 @@ for f in files:
             ds = Dataset.from_dict(chunk_dict).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
             output_ds = output_ds.add_item(ds[0])
 
-    output_ds.save_to_disk(DS_DIR + f)
+    output_ds.save_to_disk(ds_file_dir)
