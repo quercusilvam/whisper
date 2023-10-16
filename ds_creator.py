@@ -61,16 +61,13 @@ for f in files:
         chunk_dict = {
             'file': [output_chunks_fn[-1]],
             'audio': [output_chunks_fn[-1]],
-            'len': [output_chunks_len]
+            'len': [output_chunks_len[-1]]
         }
 
         if i == 0:
             output_ds = Dataset.from_dict(chunk_dict).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
         else:
             ds = Dataset.from_dict(chunk_dict).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
-            output_ds.add_item(ds[0])
-        print(output_ds[-1])
+            output_ds = output_ds.add_item(ds[0])
 
-        # ds = Dataset.from_dict(chunk_dict).cast_column("audio", Audio(sampling_rate=16000))
-        # print(ds[0]["audio"])
-        # ds.save_to_disk(DS_DIR + f)
+    output_ds.save_to_disk(DS_DIR + f)
