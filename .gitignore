@@ -164,6 +164,6 @@ chunks/
 ds/
 input/
 output/
-.mp3
-.m4a
-.txt
+*.mp3
+*.m4a
+*.txt
