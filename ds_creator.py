@@ -13,7 +13,7 @@ MAX_CHUNK_LENGTH = 30 * 1000
 WHISPER_SAMPLING = 16000
 
 files = ['test_1']
-FILE_FORMAT = '.mp3'
+FILE_FORMAT = 'mp3'
 INPUT_DIR = 'input/'
 OUTPUT_DIR = 'output/'
 CHUNK_DIR = OUTPUT_DIR + 'chunks/'
@@ -64,9 +64,35 @@ def init_output_dirs(chunk_dir_path, ds_dir_path):
         os.remove(os.path.join(ds_dir_path, file))
 
 
+def save_audio_chunks(chunks, chunk_dir_path, file_format=FILE_FORMAT):
+    """Save audio chunks to given dir path.
+
+    Save audio chunks as audio file in given chunk_dir_path with given file_format.
+    Return list of dictionaries with details about saved chunks
+    """
+
+    output_dict = []
+    for i, chunk in enumerate(chunks):
+        output_chunk_fn = chunk_file_dir + '/chunk{0}.{1}'.format(i, file_format)
+        output_chunk_len = len(chunk)
+        print('    Exporting {0}. Len {1}'.format(output_chunk_fn, output_chunk_len))
+        chunk.export(
+            output_chunk_fn,
+            format=file_format
+        )
+
+        dict = {
+            'file': [output_chunk_fn],
+            'audio': [output_chunk_fn],
+            'len': [output_chunk_len]
+        }
+        output_dict.append(dict)
+    return output_dict
+
+
 for f in files:
-    print(f'Processing file {f}{FILE_FORMAT}')
-    audio = load_audio_file(INPUT_DIR + f + FILE_FORMAT)
+    print(f'Processing file {f}.{FILE_FORMAT}')
+    audio = load_audio_file(f'{INPUT_DIR}{f}.{FILE_FORMAT}')
 
     print(f'  Create chunks as long as possible')
     audio_chunks = generate_audio_chunks(audio)
@@ -78,29 +104,14 @@ for f in files:
 
     # Process each chunk with your parameters
     print(f'  Save chunks')
-    output_chunks_fn = []
-    output_chunks_len = []
+    chunks_dict_list = save_audio_chunks(audio_chunks, ds_file_dir)
     output_ds = None
 
-    for i, chunk in enumerate(audio_chunks):
-        output_chunks_fn.append(chunk_file_dir + '/chunk{0}{1}'.format(i, FILE_FORMAT))
-        output_chunks_len.append(len(chunk))
-        print('    Exporting {0}. Len {1}'.format(output_chunks_fn[-1], output_chunks_len[-1]))
-        chunk.export(
-            output_chunks_fn[-1],
-            format=FILE_FORMAT
-        )
-
-        chunk_dict = {
-            'file': [output_chunks_fn[-1]],
-            'audio': [output_chunks_fn[-1]],
-            'len': [output_chunks_len[-1]]
-        }
-
+    for i, chunk in enumerate(chunks_dict_list):
         if i == 0:
-            output_ds = Dataset.from_dict(chunk_dict).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
+            output_ds = Dataset.from_dict(chunk).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
         else:
-            ds = Dataset.from_dict(chunk_dict).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
+            ds = Dataset.from_dict(chunk).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
             output_ds = output_ds.add_item(ds[0])
 
     output_ds.save_to_disk(ds_file_dir)
