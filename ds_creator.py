@@ -18,11 +18,17 @@ OUTPUT_DIR = 'output/'
 CHUNK_DIR = OUTPUT_DIR + 'chunks/'
 DS_DIR = OUTPUT_DIR + 'ds/'
 
+
+def load_audio_file(path, frame_rate=WHISPER_SAMPLING):
+    """Load audio file from path and return AudioSegment with set frame_rate"""
+    audio_file = AudioSegment.from_mp3(path)
+    audio_file = audio_file.set_frame_rate(frame_rate)
+    return audio_file
+
+
 for f in files:
     print(f'Processing file {f}{FILE_FORMAT}')
-
-    song = AudioSegment.from_mp3(INPUT_DIR + f + FILE_FORMAT)
-    song = song.set_frame_rate(WHISPER_SAMPLING)
+    song = load_audio_file(INPUT_DIR + f + FILE_FORMAT)
 
     print(f'  Split on silence')
     chunks = split_on_silence(
