@@ -20,6 +20,32 @@ CHUNK_DIR = OUTPUT_DIR + 'chunks/'
 DS_DIR = OUTPUT_DIR + 'ds/'
 
 
+def main():
+    """Main function of the script"""
+    for f in files:
+        process_audio_file(f)
+
+
+def process_audio_file(audio_file):
+    """Convert audio files to chunks and dataset"""
+    print(f'Processing file {audio_file}.{FILE_FORMAT}')
+    audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{FILE_FORMAT}')
+
+    print(f'  Create chunks as long as possible')
+    audio_chunks = generate_audio_chunks(audio)
+
+    print(f'  Init ouputs dir')
+    chunk_file_dir = os.path.join(CHUNK_DIR, audio_file)
+    ds_file_dir = os.path.join(DS_DIR, audio_file)
+    init_output_dirs(chunk_file_dir, ds_file_dir)
+
+    # Process each chunk with your parameters
+    print(f'  Save chunks')
+    chunks_dict_list = save_audio_chunks(audio_chunks, chunk_file_dir)
+    print(f'  Save dataset')
+    create_and_save_ds(chunks_dict_list, ds_file_dir)
+
+
 def load_audio_file(path, frame_rate=WHISPER_SAMPLING):
     """Load audio file from path and return AudioSegment with set frame_rate"""
     audio_file = AudioSegment.from_mp3(path)
@@ -73,7 +99,7 @@ def save_audio_chunks(chunks, chunk_dir_path, file_format=FILE_FORMAT):
 
     output_dict = []
     for i, chunk in enumerate(chunks):
-        output_chunk_fn = chunk_file_dir + '/chunk{0}.{1}'.format(i, file_format)
+        output_chunk_fn = chunk_dir_path + '/chunk{0}.{1}'.format(i, file_format)
         output_chunk_len = len(chunk)
         print('    Exporting {0}. Len {1}'.format(output_chunk_fn, output_chunk_len))
         chunk.export(
@@ -90,28 +116,19 @@ def save_audio_chunks(chunks, chunk_dir_path, file_format=FILE_FORMAT):
     return output_dict
 
 
-for f in files:
-    print(f'Processing file {f}.{FILE_FORMAT}')
-    audio = load_audio_file(f'{INPUT_DIR}{f}.{FILE_FORMAT}')
-
-    print(f'  Create chunks as long as possible')
-    audio_chunks = generate_audio_chunks(audio)
-
-    print(f'  Init ouputs dir')
-    chunk_file_dir = os.path.join(CHUNK_DIR, f)
-    ds_file_dir = os.path.join(DS_DIR, f)
-    init_output_dirs(chunk_file_dir, ds_file_dir)
-
-    # Process each chunk with your parameters
-    print(f'  Save chunks')
-    chunks_dict_list = save_audio_chunks(audio_chunks, ds_file_dir)
+def create_and_save_ds(chunks_dict_list, ds_file_dir):
+    """Create dataset from given list of dicts."""
     output_ds = None
-
     for i, chunk in enumerate(chunks_dict_list):
+        file = chunk['file']
+        print(f'    Adding {file} to Dataset')
         if i == 0:
-            output_ds = Dataset.from_dict(chunk).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
+            output_ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
         else:
-            ds = Dataset.from_dict(chunk).cast_column('audio', Audio(sampling_rate=WHISPER_SAMPLING))
+            ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
             output_ds = output_ds.add_item(ds[0])
 
     output_ds.save_to_disk(ds_file_dir)
+
+
+main()
