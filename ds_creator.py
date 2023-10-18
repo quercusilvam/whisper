@@ -53,6 +53,17 @@ def generate_audio_chunks(audio_file, min_silence_len=MIN_SILENCE_LEN,
     return output_chunks
 
 
+def init_output_dirs(chunk_dir_path, ds_dir_path):
+    """Create (if not exists) chunk & ds output dirs. Empty dirs if something exists inside."""
+    os.makedirs(chunk_dir_path, exist_ok=True)
+    os.makedirs(ds_dir_path, exist_ok=True)
+
+    for file in os.listdir(chunk_dir_path):
+        os.remove(os.path.join(chunk_dir_path, file))
+    for file in os.listdir(ds_dir_path):
+        os.remove(os.path.join(ds_dir_path, file))
+
+
 for f in files:
     print(f'Processing file {f}{FILE_FORMAT}')
     audio = load_audio_file(INPUT_DIR + f + FILE_FORMAT)
@@ -60,19 +71,13 @@ for f in files:
     print(f'  Create chunks as long as possible')
     audio_chunks = generate_audio_chunks(audio)
 
+    print(f'  Init ouputs dir')
     chunk_file_dir = os.path.join(CHUNK_DIR, f)
     ds_file_dir = os.path.join(DS_DIR, f)
-    os.makedirs(chunk_file_dir, exist_ok=True)
-    os.makedirs(ds_file_dir, exist_ok=True)
-
-    for file in os.listdir(chunk_file_dir):
-        os.remove(os.path.join(chunk_file_dir, file))
-
-    for file in os.listdir(ds_file_dir):
-        os.remove(os.path.join(ds_file_dir, file))
+    init_output_dirs(chunk_file_dir, ds_file_dir)
 
     # Process each chunk with your parameters
-    print(f'  Process chunks')
+    print(f'  Save chunks')
     output_chunks_fn = []
     output_chunks_len = []
     output_ds = None
@@ -80,10 +85,10 @@ for f in files:
     for i, chunk in enumerate(audio_chunks):
         output_chunks_fn.append(chunk_file_dir + '/chunk{0}{1}'.format(i, FILE_FORMAT))
         output_chunks_len.append(len(chunk))
-        print('  Exporting {0}. Len {1}'.format(output_chunks_fn[-1], output_chunks_len[-1]))
+        print('    Exporting {0}. Len {1}'.format(output_chunks_fn[-1], output_chunks_len[-1]))
         chunk.export(
             output_chunks_fn[-1],
-            format='mp3'
+            format=FILE_FORMAT
         )
 
         chunk_dict = {
