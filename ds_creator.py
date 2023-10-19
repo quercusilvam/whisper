@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# This script get
+# This script get audio file from INPUT_DIR and split it to chunks. Then save output as Huggingface Dataset
 
 import os
 from datasets import Dataset, Audio
