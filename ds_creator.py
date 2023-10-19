@@ -15,7 +15,7 @@ WHISPER_SAMPLING = 16000
 files = ['test_1']
 FILE_FORMAT = 'mp3'
 INPUT_DIR = 'input/'
-OUTPUT_DIR = 'output/'
+OUTPUT_DIR = 'audio_chunks/'
 CHUNK_DIR = OUTPUT_DIR + 'chunks/'
 DS_DIR = OUTPUT_DIR + 'ds/'
 

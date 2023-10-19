@@ -163,6 +163,7 @@ Files related to audio module
 chunks/
 ds/
 input/
+audio_chunks/
 output/
 *.mp3
 *.m4a
