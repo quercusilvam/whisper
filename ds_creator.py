@@ -100,18 +100,11 @@ def save_audio_chunks(chunks, chunk_dir_path, file_format=FILE_FORMAT):
     output_dict = []
     for i, chunk in enumerate(chunks):
         output_chunk_fn = chunk_dir_path + '/chunk{:04d}.{}'.format(i, file_format)
-        output_chunk_len = len(chunk)
-        print('    Exporting {0}. Len {1}'.format(output_chunk_fn, output_chunk_len))
-        chunk.export(
-            output_chunk_fn,
-            format=file_format
-        )
-
-        d = {
-            'file': [output_chunk_fn],
-            'audio': [output_chunk_fn],
-            'len': [output_chunk_len]
-        }
+        chunk.export(output_chunk_fn, format=file_format)
+        # final length for file could be different from chunk itself - so we need to read real file
+        output_chunk_len = len(AudioSegment.from_mp3(output_chunk_fn))
+        print('    Exported {0}. Len {1}'.format(output_chunk_fn, output_chunk_len))
+        d = {'file': [output_chunk_fn], 'audio': [output_chunk_fn], 'len': [output_chunk_len]}
         output_dict.append(d)
     return output_dict
 
