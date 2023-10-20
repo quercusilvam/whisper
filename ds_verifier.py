@@ -5,7 +5,6 @@
 import os
 from datasets import Dataset, Audio
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
 
 INPUT_DIR = 'audio_chunks'
 INPUT_CHUNKS_DIR = os.path.join(INPUT_DIR, 'chunks')
