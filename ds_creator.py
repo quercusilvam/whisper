@@ -4,6 +4,8 @@
 
 import os
 import argparse
+import pathlib
+
 from datasets import Dataset, Audio
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -14,17 +16,20 @@ MAX_CHUNK_LENGTH = 30 * 1000
 WHISPER_SAMPLING = 16000
 
 INPUT_FILES = ['test_1']
-FILE_FORMAT = 'mp3'
+AUDIO_FILE_FORMAT = 'mp3'
+TRANSCRIPTION_FILE_FORMAT = 'txt'
 INPUT_DIR = 'input/'
 OUTPUT_DIR = 'audio_chunks/'
-CHUNK_DIR = os.path.join(OUTPUT_DIR, 'chunks/')
-DS_DIR = os.path.join(OUTPUT_DIR, 'ds/')
+CHUNK_DIR = 'chunks/'
+DS_DIR = 'ds/'
+TEST_DIR = 'test/'
 
 
 def main():
     """Main function of the script"""
     for f in INPUT_FILES:
         create_and_verify_ds(f)
+        create_and_verify_test_ds(f)
 
 
 def create_and_verify_ds(filename):
@@ -33,19 +38,25 @@ def create_and_verify_ds(filename):
     verify_ds(filename)
 
 
+def create_and_verify_test_ds(dirname):
+    """Create test DS based on audio_chunks in 'test' folder and transcription for each chunk."""
+    create_test_ds(dirname)
+
+
 def process_audio_file(audio_file):
     """Convert audio files to chunks and dataset"""
-    if create_ds_from_input:
-        print(f'Processing file {audio_file}.{FILE_FORMAT}')
-        audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{FILE_FORMAT}')
+    if is_create_ds_from_input:
+        print(f'Processing file {audio_file}.{AUDIO_FILE_FORMAT}')
+        audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{AUDIO_FILE_FORMAT}')
 
         print(f'  Create chunks as long as possible')
         audio_chunks = generate_audio_chunks(audio)
 
-        print(f'  Init ouputs dir')
-        chunk_file_dir = os.path.join(CHUNK_DIR, audio_file)
-        ds_file_dir = os.path.join(DS_DIR, audio_file)
-        init_output_dirs(chunk_file_dir, ds_file_dir)
+        print(f'  Init output dir')
+        chunk_file_dir = os.path.join(OUTPUT_DIR, CHUNK_DIR, audio_file)
+        ds_file_dir = os.path.join(OUTPUT_DIR, DS_DIR, audio_file)
+        init_output_dir(chunk_file_dir)
+        init_output_dir(ds_file_dir)
 
         # Process each chunk with your parameters
         print(f'  Save chunks')
@@ -89,18 +100,16 @@ def generate_audio_chunks(audio_file, min_silence_len=MIN_SILENCE_LEN,
     return output_chunks
 
 
-def init_output_dirs(chunk_dir_path, ds_dir_path):
+def init_output_dir(dir_path):
     """Create (if not exists) chunk & ds output dirs. Empty dirs if something exists inside."""
-    os.makedirs(chunk_dir_path, exist_ok=True)
-    os.makedirs(ds_dir_path, exist_ok=True)
+    os.makedirs(dir_path, exist_ok=True)
 
-    for file in os.listdir(chunk_dir_path):
-        os.remove(os.path.join(chunk_dir_path, file))
-    for file in os.listdir(ds_dir_path):
-        os.remove(os.path.join(ds_dir_path, file))
+    for file in os.scandir(dir_path):
+        if file.is_file():
+            os.remove(file.path)
 
 
-def save_audio_chunks(chunks, chunk_dir_path, file_format=FILE_FORMAT):
+def save_audio_chunks(chunks, chunk_dir_path, file_format=AUDIO_FILE_FORMAT):
     """Save audio chunks to given dir path.
 
     Save audio chunks as audio file in given chunk_dir_path with given file_format.
@@ -136,14 +145,27 @@ def create_and_save_ds(chunks_dict_list, ds_file_dir):
 
 def verify_ds(dirname):
     """Verify created dataset"""
-    if verify_created_ds:
+    if is_verify_created_ds:
         print(f'  Read dataset {dirname}')
-        ds = read_dataset_from_dir(os.path.join(DS_DIR, dirname))
-        chunks = read_audio_chunks_from_dir(os.path.join(CHUNK_DIR, dirname))
+        ds = read_dataset_from_dir(os.path.join(OUTPUT_DIR, DS_DIR, dirname))
+        chunks = read_audio_chunks_from_dir(os.path.join(OUTPUT_DIR, CHUNK_DIR, dirname))
         print(f'  Verify dataset {dirname}')
         compare_dataset_with_audio_chunks(ds, chunks)
     else:
         print(f'  Verification of {dirname} skipped')
+
+
+def create_test_ds(dirname):
+    """Create test DS based on audio_chunks with transcription."""
+    if is_create_test_ds:
+        print(f'  Create test DS for folder {dirname}')
+        chunk_dir = os.path.join(TEST_DIR, CHUNK_DIR, dirname)
+        print(f'  Read chunks from {chunk_dir}')
+        chunks = read_audio_chunks_from_dir(chunk_dir)
+        print(f'  Read transcription from {chunk_dir}')
+        transcriptions = read_transcriptions_from_dir(chunk_dir)
+    else:
+        print(f' Create of test DS for {dirname} skipped')
 
 
 def read_dataset_from_dir(ds_dir):
@@ -151,14 +173,27 @@ def read_dataset_from_dir(ds_dir):
     dataset = Dataset.load_from_disk(ds_dir)
     return dataset
 
+
 def read_audio_chunks_from_dir(audio_chunks_dir):
     """Read audio chunks from dir."""
     output_dict = []
-    for f in os.listdir(audio_chunks_dir):
-        path = os.path.join(audio_chunks_dir, f)
-        # print(f'  Found chunk {path}')
-        audio_file = AudioSegment.from_mp3(path)
-        d = {'file': path, 'len': len(audio_file)}
+    files = pathlib.Path(audio_chunks_dir).glob(f'*.{AUDIO_FILE_FORMAT}')
+    for f in list(files):
+        # print(f'  Found audio chunk {f}')
+        audio_file = AudioSegment.from_mp3(f)
+        d = {'file': f, 'len': len(audio_file)}
+        output_dict.append(d)
+    return output_dict
+
+
+def read_transcriptions_from_dir(transcription_chunks_dir):
+    """Read transcriptions chunks from dir."""
+    output_dict = []
+    files = pathlib.Path(transcription_chunks_dir).glob(f'*.{TRANSCRIPTION_FILE_FORMAT}')
+    for f in list(files):
+        # print(f'  Found transcription chunk {f}')
+        transcription = '#TODO'
+        d = {'transcription': [transcription]}
         output_dict.append(d)
     return output_dict
 
@@ -186,8 +221,8 @@ parser.add_argument('-v', '--verification', action='store_true',
                     help='Verify the created DSes')
 args = parser.parse_args()
 
-create_ds_from_input = not args.no_input
-create_test_ds = args.create_test
-verify_created_ds = args.verification
+is_create_ds_from_input = not args.no_input
+is_create_test_ds = args.create_test
+is_verify_created_ds = args.verification
 
 main()
