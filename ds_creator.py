@@ -3,6 +3,7 @@
 # This script get audio file from INPUT_DIR and split it to chunks. Then save output as Huggingface Dataset
 
 import os
+import argparse
 from datasets import Dataset, Audio
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -12,7 +13,7 @@ SILENCE_THRESHOLD = -50
 MAX_CHUNK_LENGTH = 30 * 1000
 WHISPER_SAMPLING = 16000
 
-files = ['test_1']
+INPUT_FILES = ['test_1']
 FILE_FORMAT = 'mp3'
 INPUT_DIR = 'input/'
 OUTPUT_DIR = 'audio_chunks/'
@@ -22,8 +23,23 @@ DS_DIR = OUTPUT_DIR + 'ds/'
 
 def main():
     """Main function of the script"""
-    for f in files:
-        process_audio_file(f)
+
+    parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
+    parser.add_argument('-ni', '--no_input', action='store_true',
+                        help='If set the script will not create audio_chunks from "input" dir')
+    parser.add_argument('-t', '--create_test', action='store_true',
+                        help='If set the script will create test DS from "test" dir with transcription to test WER')
+    parser.add_argument('-v', '--verification', action='store_true',
+                        help='Verify the created DSes')
+    args = parser.parse_args()
+
+    create_ds_from_input = not args.no_input
+    create_test_ds = args.create_test
+    verify_created_ds = args.verification
+
+    if create_ds_from_input:
+        for f in INPUT_FILES:
+            process_audio_file(f)
 
 
 def process_audio_file(audio_file):

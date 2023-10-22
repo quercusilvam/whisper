@@ -165,6 +165,7 @@ ds/
 input/
 audio_chunks/
 output/
+test/
 *.mp3
 *.m4a
 *.txt
