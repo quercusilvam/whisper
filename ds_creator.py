@@ -17,49 +17,43 @@ INPUT_FILES = ['test_1']
 FILE_FORMAT = 'mp3'
 INPUT_DIR = 'input/'
 OUTPUT_DIR = 'audio_chunks/'
-CHUNK_DIR = OUTPUT_DIR + 'chunks/'
-DS_DIR = OUTPUT_DIR + 'ds/'
+CHUNK_DIR = os.path.join(OUTPUT_DIR, 'chunks/')
+DS_DIR = os.path.join(OUTPUT_DIR, 'ds/')
 
 
 def main():
     """Main function of the script"""
+    for f in INPUT_FILES:
+        create_and_verify_ds(f)
 
-    parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
-    parser.add_argument('-ni', '--no_input', action='store_true',
-                        help='If set the script will not create audio_chunks from "input" dir')
-    parser.add_argument('-t', '--create_test', action='store_true',
-                        help='If set the script will create test DS from "test" dir with transcription to test WER')
-    parser.add_argument('-v', '--verification', action='store_true',
-                        help='Verify the created DSes')
-    args = parser.parse_args()
 
-    create_ds_from_input = not args.no_input
-    create_test_ds = args.create_test
-    verify_created_ds = args.verification
-
-    if create_ds_from_input:
-        for f in INPUT_FILES:
-            process_audio_file(f)
+def create_and_verify_ds(filename):
+    """Process audio files, create DS based on them and verify it integrity."""
+    process_audio_file(filename)
+    verify_ds(filename)
 
 
 def process_audio_file(audio_file):
     """Convert audio files to chunks and dataset"""
-    print(f'Processing file {audio_file}.{FILE_FORMAT}')
-    audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{FILE_FORMAT}')
+    if create_ds_from_input:
+        print(f'Processing file {audio_file}.{FILE_FORMAT}')
+        audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{FILE_FORMAT}')
 
-    print(f'  Create chunks as long as possible')
-    audio_chunks = generate_audio_chunks(audio)
+        print(f'  Create chunks as long as possible')
+        audio_chunks = generate_audio_chunks(audio)
 
-    print(f'  Init ouputs dir')
-    chunk_file_dir = os.path.join(CHUNK_DIR, audio_file)
-    ds_file_dir = os.path.join(DS_DIR, audio_file)
-    init_output_dirs(chunk_file_dir, ds_file_dir)
+        print(f'  Init ouputs dir')
+        chunk_file_dir = os.path.join(CHUNK_DIR, audio_file)
+        ds_file_dir = os.path.join(DS_DIR, audio_file)
+        init_output_dirs(chunk_file_dir, ds_file_dir)
 
-    # Process each chunk with your parameters
-    print(f'  Save chunks')
-    chunks_dict_list = save_audio_chunks(audio_chunks, chunk_file_dir)
-    print(f'  Save dataset')
-    create_and_save_ds(chunks_dict_list, ds_file_dir)
+        # Process each chunk with your parameters
+        print(f'  Save chunks')
+        chunks_dict_list = save_audio_chunks(audio_chunks, chunk_file_dir)
+        print(f'  Save dataset')
+        create_and_save_ds(chunks_dict_list, ds_file_dir)
+    else:
+        print(f'Processing of file {audio_file} skipped')
 
 
 def load_audio_file(path, frame_rate=WHISPER_SAMPLING):
@@ -139,5 +133,61 @@ def create_and_save_ds(chunks_dict_list, ds_file_dir):
 
     output_ds.save_to_disk(ds_file_dir)
 
+
+def verify_ds(dirname):
+    """Verify created dataset"""
+    if verify_created_ds:
+        print(f'  Read dataset {dirname}')
+        ds = read_dataset_from_dir(os.path.join(DS_DIR, dirname))
+        chunks = read_audio_chunks_from_dir(os.path.join(CHUNK_DIR, dirname))
+        print(f'  Verify dataset {dirname}')
+        compare_dataset_with_audio_chunks(ds, chunks)
+    else:
+        print(f'  Verification of {dirname} skipped')
+
+
+def read_dataset_from_dir(ds_dir):
+    """Read dataset from directory."""
+    dataset = Dataset.load_from_disk(ds_dir)
+    return dataset
+
+def read_audio_chunks_from_dir(audio_chunks_dir):
+    """Read audio chunks from dir."""
+    output_dict = []
+    for f in os.listdir(audio_chunks_dir):
+        path = os.path.join(audio_chunks_dir, f)
+        # print(f'  Found chunk {path}')
+        audio_file = AudioSegment.from_mp3(path)
+        d = {'file': path, 'len': len(audio_file)}
+        output_dict.append(d)
+    return output_dict
+
+
+def compare_dataset_with_audio_chunks(ds, audio_chunks):
+    """Compare if filename and length of dataset is the same as read from audio chunks."""
+    for i, d in enumerate(ds):
+        if d['file'] != audio_chunks[i]['file']:
+            print('  Checking ds {}'.format(d))
+            print('  With audio_chunk {}'.format(audio_chunks[i]))
+            print('  [ERROR] - dataset file {0} is not equal audio chunk file {1}'.format(d['file'], audio_chunks[i]['file']))
+        if d['len'] != audio_chunks[i]['len']:
+            print('  Checking ds {}'.format(d))
+            print('  With audio_chunk {}'.format(audio_chunks[i]))
+            print('  [ERROR] - dataset len {0} is not equal audio chunk len {1}'.format(d['len'], audio_chunks[i]['len']))
+    print('[OK]')
+
+
+parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
+parser.add_argument('-ni', '--no_input', action='store_true',
+                    help='If set the script will not create audio_chunks from "input" dir')
+parser.add_argument('-t', '--create_test', action='store_true',
+                    help='If set the script will create test DS from "test" dir with transcription to test WER')
+parser.add_argument('-v', '--verification', action='store_true',
+                    help='Verify the created DSes')
+args = parser.parse_args()
+
+create_ds_from_input = not args.no_input
+create_test_ds = args.create_test
+verify_created_ds = args.verification
 
 main()
