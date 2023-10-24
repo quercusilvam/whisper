@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import argparse
 import os
 import evaluate
 import gc
@@ -10,7 +10,69 @@ INPUT_DIR = 'audio_chunks/'
 TEST_DIR = 'test/'
 CHUNKS_DIR = 'chunks/'
 DS_DIR = 'ds/'
-MODELS = ['openai/whisper-small', 'bardsai/whisper-small-pl']
+MODEL = 'openai/whisper-small' # 'bardsai/whisper-small-pl']
+
+
+def main():
+    """Main function."""
+    processor = WhisperProcessor.from_pretrained(MODEL, language='pl', task='transcribe')
+    model = WhisperForConditionalGeneration.from_pretrained(MODEL)
+    model.config.forced_decoder_ids = None
+
+    if is_only_benchmark:
+        benchmark_model(processor, model)
+    else:
+        generate_transcript(processor, model)
+
+
+def benchmark_model(processor, model):
+    """Calculate total WER for all test_ds for test_model."""
+    print(f'Benchmarking model {MODEL}')
+    exit_values = []
+    metric = evaluate.load('wer')
+
+    for dir_name in os.scandir(os.path.join(TEST_DIR, DS_DIR)):
+        print(f'Read dataset {dir_name.name}')
+        ds = Dataset.load_from_disk(dir_name.path)
+
+        calculated_wer = calculate_wer(processor, model, ds, metric)
+
+        t = 'Model {}. File {}. Total WER={:.2f}; average WER={:.2f}'
+        exit_values.append(t.format(MODEL, dir_name.name, calculated_wer['total_wer'], calculated_wer['average_wer']))
+
+    print(exit_values)
+
+
+def calculate_wer(test_processor, test_model, test_ds, metric):
+    """Calculate WER for given test_processor/test_model based on test_ds."""
+    total_wer = 0
+    average_wer = 0
+    for i, d in enumerate(test_ds):
+        l = d['len']
+        transcription = d['transcription']
+        prediction_text = process_sample(d['audio'], test_processor, test_model)
+        wer = 100 * metric.compute(predictions=[prediction_text], references=[transcription])
+        total_wer += wer
+        average_wer = total_wer / (i + 1)
+        t = 'Chunk {}, current WER={:.2f}; total WER={:.2f}; average WER={:.2f}'
+        print(t.format(i + 1, wer, total_wer, average_wer))
+    return dict({'total_wer': total_wer, 'average_wer': average_wer})
+
+
+def generate_transcript(processor, model):
+    """Generate transcript for input datasets."""
+    print(f'Generating transcript based on model {MODEL}')
+    for dir_name in os.scandir(os.path.join(TEST_DIR, DS_DIR)):
+        print(f'Read dataset {dir_name.name}')
+        ds = Dataset.load_from_disk(dir_name.path)
+
+        total_length = 0
+        for i, d in enumerate(ds):
+            l = d['len']
+            print(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}')
+            total_length += l
+            prediction_text = process_sample(d['audio'], processor, model)
+            print(prediction_text)
 
 
 def microseconds_to_audio_timestamp(microseconds):
@@ -36,60 +98,11 @@ def process_sample(sample, processor, model):
     return text[0]
 
 
-def calculate_wer(test_processor, test_model, test_ds):
-    """Calculate WER for given test_processor/test_model based on test_ds."""
-    total_wer = 0
-    average_wer = 0
-    for i, d in enumerate(test_ds):
-        l = d['len']
-        transcription = d['transcription']
-        prediction_text = process_sample(d['audio'], test_processor, test_model)
-        wer = 100 * metric.compute(predictions=[prediction_text], references=[transcription])
-        total_wer += wer
-        average_wer = total_wer / (i + 1)
-        t = 'Chunk {}, current WER={:.2f}; total WER={:.2f}; average WER={:.2f}'
-        print(t.format(i + 1, wer, total_wer, average_wer))
-    return dict({'total_wer': total_wer, 'average_wer': average_wer})
+parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
+parser.add_argument('-b', '--benchmark', action='store_true',
+                    help='If set the script will only benchmark model(s) based on test dataset(s)')
+args = parser.parse_args()
 
+is_only_benchmark = args.benchmark
 
-exit_values = []
-for i, m in enumerate(MODELS):
-    print(f'Checking model {m}')
-
-    if i != 0:
-        # memory cleanup
-        collected = gc.collect()
-        print('Garbage collector: collected {:d} objects.'.format(collected))
-
-    processor = WhisperProcessor.from_pretrained(m, language='pl', task='transcribe')
-    model = WhisperForConditionalGeneration.from_pretrained(m)
-
-    model.config.forced_decoder_ids = None
-    metric = evaluate.load('wer')
-
-    for dir_name in os.scandir(os.path.join(TEST_DIR, DS_DIR)):
-        print(f'Read dataset {dir_name.name}')
-        ds = Dataset.load_from_disk(dir_name.path)
-
-        calculated_wer = calculate_wer(processor, model, ds)
-
-        t = 'Model {}. File {}. Total WER={:.2f}; average WER={:.2f}'
-        exit_values.append(t.format(m, dir_name.name, calculated_wer['total_wer'], calculated_wer['average_wer']))
-
-        # total_length = 0
-        # total_wer = 0
-        # average_wer = 0
-        # for i, d in enumerate(ds):
-        #     l = d['len']
-        #     transcription = d['transcription']
-        #     print(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}')
-        #     total_length += l
-        #     prediction_text = process_sample(d['audio'], processor, model)
-        #     wer = 100 * metric.compute(predictions=[prediction_text], references=[transcription])
-        #     total_wer += wer
-        #     average_wer = total_wer/(i+1)
-        #     print(prediction_text)
-        #     print(transcription)
-        #     print(f'current WER={wer}; total WER={total_wer}; average WER={average_wer}')
-
-print(exit_values)
+main()
