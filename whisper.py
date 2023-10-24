@@ -2,6 +2,7 @@
 
 import os
 import evaluate
+import gc
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Dataset, Audio
 
@@ -37,10 +38,17 @@ def process_sample(sample, processor, model):
 
 
 exit_values=[]
-for m in MODELS:
+for i, m in enumerate(MODELS):
     print(f'Checking model {m}')
+
+    if i != 0:
+        # memory cleanup
+        collected = gc.collect()
+        print('Garbage collector: collected {:d} objects.'.format(collected))
+
     processor = WhisperProcessor.from_pretrained(m, language='pl', task='transcribe')
     model = WhisperForConditionalGeneration.from_pretrained(m)
+
     model.config.forced_decoder_ids = None
     metric = evaluate.load('wer')
 
