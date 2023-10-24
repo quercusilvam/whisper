@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 
 import os
+import evaluate
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Dataset, Audio
 
-INPUT_DIR = 'audio_chunks'
-INPUT_CHUNKS_DIR = os.path.join(INPUT_DIR, 'chunks')
-INPUT_DS_DIR = os.path.join(INPUT_DIR, 'ds')
-MODELS = ['openai/whisper-small' ] #"bardsai/whisper-small-pl"
+
+INPUT_DIR = 'audio_chunks/'
+TEST_DIR = 'test/'
+CHUNKS_DIR = 'chunks/'
+DS_DIR = 'ds/'
+MODELS = ['openai/whisper-small', 'bardsai/whisper-small-pl']
 
 
 def microseconds_to_audio_timestamp(microseconds):
@@ -27,25 +30,40 @@ def process_sample(sample, processor, model):
                                return_tensors='pt').input_features
     forced_decoder_ids = processor.get_decoder_prompt_ids(language='pl', task='transcribe')
 
-    # generate token ids
     predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
-    # decode token ids to text
     text = processor.batch_decode(predicted_ids, skip_special_tokens=True)
+
     return text[0]
 
 
+exit_values=[]
 for m in MODELS:
-    processor = WhisperProcessor.from_pretrained(m)
+    print(f'Checking model {m}')
+    processor = WhisperProcessor.from_pretrained(m, language='pl', task='transcribe')
     model = WhisperForConditionalGeneration.from_pretrained(m)
     model.config.forced_decoder_ids = None
+    metric = evaluate.load('wer')
 
-    for dir_name in os.listdir(INPUT_DS_DIR):
-        ds = Dataset.load_from_disk(os.path.join(INPUT_DS_DIR, dir_name))
+    for dir_name in os.scandir(os.path.join(TEST_DIR, DS_DIR)):
+        print(f'Read dataset {dir_name.name}')
+        ds = Dataset.load_from_disk(dir_name.path)
 
         total_length = 0
-        for d in ds:
+        total_wer = 0
+        average_wer = 0
+        for i, d in enumerate(ds):
             l = d['len']
+            transcription = d['transcription']
             print(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}')
             total_length += l
-            transcription = process_sample(d['audio'], processor, model)
+            prediction_text = process_sample(d['audio'], processor, model)
+            wer = 100 * metric.compute(predictions=[prediction_text], references=[transcription])
+            total_wer += wer
+            average_wer = total_wer/(i+1)
+            print(prediction_text)
             print(transcription)
+            print(f'current WER={wer}; total WER={total_wer}; average WER={average_wer}')
+
+        exit_values.append(f'Model {m}. File {dir_name.name}. Total WER={total_wer}; average WER={average_wer}')
+
+print(exit_values)
