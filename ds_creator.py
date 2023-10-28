@@ -15,7 +15,7 @@ SILENCE_THRESHOLD = -50
 MAX_CHUNK_LENGTH = 30 * 1000
 WHISPER_SAMPLING = 16000
 
-INPUT_FILES = ['test_1']
+INPUT_FILES = ['test_1', 'test_2', 'test_3','test_4', 'test_5']
 AUDIO_FILE_FORMAT = 'mp3'
 TRANSCRIPTION_FILE_FORMAT = 'txt'
 INPUT_DIR = 'input/'
@@ -23,6 +23,20 @@ OUTPUT_DIR = 'audio_chunks/'
 CHUNK_DIR = 'chunks/'
 DS_DIR = 'ds/'
 TEST_DIR = 'test/'
+
+
+parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
+parser.add_argument('-ni', '--no_input', action='store_true',
+                    help='If set the script will not create audio_chunks from "input" dir')
+parser.add_argument('-t', '--create_test', action='store_true',
+                    help='If set the script will create test DS from "test" dir with transcription to test WER')
+parser.add_argument('-v', '--verification', action='store_true',
+                    help='Verify the created DSes')
+args = parser.parse_args()
+
+is_create_ds_from_input = not args.no_input
+is_create_test_ds = args.create_test
+is_verify_created_ds = args.verification
 
 
 def main():
@@ -238,19 +252,5 @@ def compare_dataset_with_audio_chunks(ds, audio_chunks):
             print('  With audio_chunk {}'.format(audio_chunks[i]))
             print('  [ERROR] - dataset len {0} is not equal audio chunk len {1}'.format(d_len, ac_len))
     print('[OK]')
-
-
-parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
-parser.add_argument('-ni', '--no_input', action='store_true',
-                    help='If set the script will not create audio_chunks from "input" dir')
-parser.add_argument('-t', '--create_test', action='store_true',
-                    help='If set the script will create test DS from "test" dir with transcription to test WER')
-parser.add_argument('-v', '--verification', action='store_true',
-                    help='Verify the created DSes')
-args = parser.parse_args()
-
-is_create_ds_from_input = not args.no_input
-is_create_test_ds = args.create_test
-is_verify_created_ds = args.verification
 
 main()
