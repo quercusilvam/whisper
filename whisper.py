@@ -10,7 +10,7 @@ INPUT_DIR = 'audio_chunks/'
 TEST_DIR = 'test/'
 CHUNKS_DIR = 'chunks/'
 DS_DIR = 'ds/'
-MODEL = 'openai/whisper-small'
+MODEL = 'openai/whisper-large-v2'
 
 parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
 parser.add_argument('-b', '--benchmark', action='store_true',
@@ -63,10 +63,17 @@ def calculate_wer(test_processor, test_model, test_ds, metric):
     prediction_text = []
     for d in test_ds:
         chunk = d['file']
-        print(f'Read chunk {chunk}')
+        print(f'  Read chunk {chunk}')
         transcription.append(d['transcription'])
         prediction_text.append(process_sample(d['audio'], test_processor, test_model))
-    wer = 100 * metric.compute(predictions=prediction_text, references=transcription)
+    pr = ''
+    for p in prediction_text:
+        pr += ' ' + p
+    tr = ''
+    for t in transcription:
+        tr += ' ' + t
+    wer = 100 * metric.compute(predictions=[pr], references=[tr])
+    print(pr)
     print('WER={:.2f}'.format(wer))
     return dict({'wer': wer})
 
