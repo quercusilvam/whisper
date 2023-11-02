@@ -84,6 +84,7 @@ def calculate_wer(test_processor, test_model, test_ds, metric):
 def generate_transcript(processor, model):
     """Generate transcript for input datasets."""
     print(f'Generating transcript based on model {MODEL}')
+    init_output_dir(OUTPUT_DIR)
     for dir_name in os.scandir(os.path.join(INPUT_DIR, DS_DIR)):
         print(f'Read dataset {dir_name.name}')
         ds = Dataset.load_from_disk(dir_name.path)
@@ -101,6 +102,11 @@ def generate_transcript(processor, model):
                 prediction_text = process_sample(d['audio'], processor, model)
                 file.write(prediction_text + '\n')
                 file.flush()
+
+
+def init_output_dir(dir_path):
+    """Create (if not exists) chunk & ds output dirs."""
+    os.makedirs(dir_path, exist_ok=True)
 
 
 def microseconds_to_audio_timestamp(microseconds):
