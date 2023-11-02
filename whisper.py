@@ -91,16 +91,16 @@ def generate_transcript(processor, model):
         total_length = 0
         output_text=[]
         output_file_name = os.path.join(OUTPUT_DIR, f'{dir_name.name}.{TRANSCRIPTION_FILE_FORMAT}')
-        for i, d in enumerate(ds):
-            l = d['len']
-            output_text.append(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}\n')
-            print(output_text[-1:])
-            total_length += l
-            prediction_text = process_sample(d['audio'], processor, model)
-            print(prediction_text)
-
         with open(output_file_name, 'w') as file:
-            file.write(output_text)
+            for i, d in enumerate(ds):
+                l = d['len']
+                time_mark = f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}'
+                print(time_mark)
+                file.write(time_mark + '\n')
+                total_length += l
+                prediction_text = process_sample(d['audio'], processor, model)
+                file.write(prediction_text + '\n')
+                file.flush()
 
 
 def microseconds_to_audio_timestamp(microseconds):
