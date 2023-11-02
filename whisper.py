@@ -81,7 +81,7 @@ def calculate_wer(test_processor, test_model, test_ds, metric):
 def generate_transcript(processor, model):
     """Generate transcript for input datasets."""
     print(f'Generating transcript based on model {MODEL}')
-    for dir_name in os.scandir(os.path.join(TEST_DIR, DS_DIR)):
+    for dir_name in os.scandir(os.path.join(INPUT_DIR, DS_DIR)):
         print(f'Read dataset {dir_name.name}')
         ds = Dataset.load_from_disk(dir_name.path)
 
@@ -113,7 +113,11 @@ def process_sample(sample, processor, model):
     if torch.cuda.is_available():
         input_features = input_features.to('cuda')
 
-    predicted_ids = model.generate(input_features, forced_decoder_ids=forced_decoder_ids)
+    predicted_ids = model.generate(input_features,
+                                   language='pl',
+                                   is_multilingual=True,
+                                   task='transcribe',
+                                   forced_decoder_ids=forced_decoder_ids)
     text = processor.batch_decode(predicted_ids, skip_special_tokens=True)
 
     return text[0]
