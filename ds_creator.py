@@ -107,6 +107,24 @@ def generate_audio_chunks(audio_file, min_silence_len=MIN_SILENCE_LEN,
     chunks as close as possible to chunks using in speach recognition whisper tool, and we are sure audio is not
     split in the middle of spoken word
     """
+    silent_spots = split_to_chunks_shorter_than_max(audio_file, min_silence_len, silence_threshold, max_chunk_length)
+    output_chunks = [silent_spots[0]]
+    for ss in silent_spots[1:]:
+        if len(output_chunks[-1]) + len(ss) < max_chunk_length:
+            output_chunks[-1] += ss
+        else:
+            output_chunks.append(ss)
+    return output_chunks
+
+
+def split_to_chunks_shorter_than_max(audio_file, min_silence_len=MIN_SILENCE_LEN,
+                                     silence_threshold=SILENCE_THRESHOLD,
+                                     max_chunk_length=MAX_CHUNK_LENGTH):
+    """Split audio file on silence to chunks shorter than max_chunk_length.
+
+    If needed change silence_threshold to higher value to split too long chunks
+    """
+    threshold_step = 5
     silent_spots = split_on_silence(
         audio_file,
         min_silence_len=min_silence_len,
@@ -114,10 +132,15 @@ def generate_audio_chunks(audio_file, min_silence_len=MIN_SILENCE_LEN,
         keep_silence=True,
         seek_step=50
     )
-    output_chunks = [silent_spots[0]]
-    for ss in silent_spots[1:]:
-        if len(output_chunks[-1]) + len(ss) < max_chunk_length:
-            output_chunks[-1] += ss
+    output_chunks = []
+    for ss in silent_spots:
+        if len(ss) > max_chunk_length and silence_threshold < 0:
+            print(f'  [WARNING] Chunk too big. Try splitting with silence_threshold={silence_threshold+threshold_step}')
+            for s in split_to_chunks_shorter_than_max(ss,
+                                                      min_silence_len,
+                                                      silence_threshold+threshold_step,
+                                                      max_chunk_length):
+                output_chunks.append(s)
         else:
             output_chunks.append(ss)
     return output_chunks
