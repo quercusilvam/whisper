@@ -9,8 +9,11 @@ from datasets import Dataset, Audio
 INPUT_DIR = 'audio_chunks/'
 TEST_DIR = 'test/'
 CHUNKS_DIR = 'chunks/'
+OUTPUT_DIR = 'output/'
 DS_DIR = 'ds/'
 MODEL = 'openai/whisper-large-v2'
+
+TRANSCRIPTION_FILE_FORMAT = 'txt'
 
 parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
 parser.add_argument('-b', '--benchmark', action='store_true',
@@ -86,12 +89,18 @@ def generate_transcript(processor, model):
         ds = Dataset.load_from_disk(dir_name.path)
 
         total_length = 0
+        output_text=[]
+        output_file_name = os.path.join(OUTPUT_DIR, f'{dir_name.name}.{TRANSCRIPTION_FILE_FORMAT}')
         for i, d in enumerate(ds):
             l = d['len']
-            print(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}')
+            output_text.append(f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}\n')
+            print(output_text[-1:])
             total_length += l
             prediction_text = process_sample(d['audio'], processor, model)
             print(prediction_text)
+
+        with open(output_file_name, 'w') as file:
+            file.write(output_text)
 
 
 def microseconds_to_audio_timestamp(microseconds):
