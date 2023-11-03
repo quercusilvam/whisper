@@ -18,20 +18,23 @@ TRANSCRIPTION_FILE_FORMAT = 'txt'
 parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
 parser.add_argument('-b', '--benchmark', action='store_true',
                     help='If set the script will only benchmark model(s) based on test dataset(s)')
+parser.add_argument('-m', '--model', default=MODEL,
+                    help='Set the custom model to use')
 args = parser.parse_args()
 
 is_only_benchmark = args.benchmark
+model_name = args.model
 
 
 def main():
     """Main function."""
-    print(f'Starting loading model {MODEL}')
+    print(f'Starting loading model {model_name}')
     if torch.cuda.is_available():
-        processor = WhisperProcessor.from_pretrained(MODEL, language='pl', task='transcribe')
-        model = WhisperForConditionalGeneration.from_pretrained(MODEL).to('cuda')
+        processor = WhisperProcessor.from_pretrained(model_name, language='pl', task='transcribe')
+        model = WhisperForConditionalGeneration.from_pretrained(model_name).to('cuda')
     else:
-        processor = WhisperProcessor.from_pretrained(MODEL, language='pl', task='transcribe')
-        model = WhisperForConditionalGeneration.from_pretrained(MODEL)
+        processor = WhisperProcessor.from_pretrained(model_name, language='pl', task='transcribe')
+        model = WhisperForConditionalGeneration.from_pretrained(model_name)
 
     model.config.forced_decoder_ids = None
     print('Ended loading model')
@@ -44,7 +47,7 @@ def main():
 
 def benchmark_model(processor, model):
     """Calculate total WER for all test_ds for test_model."""
-    print(f'Benchmarking model {MODEL}')
+    print(f'Benchmarking model {model_name}')
     exit_values = []
     metric = evaluate.load('wer')
 
@@ -55,7 +58,7 @@ def benchmark_model(processor, model):
         calculated_wer = calculate_wer(processor, model, ds, metric)
 
         t = 'Model {}. File {}. WER={:.2f}'
-        exit_values.append(t.format(MODEL, dir_name.name, calculated_wer['wer']))
+        exit_values.append(t.format(model_name, dir_name.name, calculated_wer['wer']))
 
     print(exit_values)
 
@@ -83,7 +86,7 @@ def calculate_wer(test_processor, test_model, test_ds, metric):
 
 def generate_transcript(processor, model):
     """Generate transcript for input datasets."""
-    print(f'Generating transcript based on model {MODEL}')
+    print(f'Generating transcript based on model {model_name}')
     init_output_dir(OUTPUT_DIR)
     for dir_name in os.scandir(os.path.join(INPUT_DIR, DS_DIR)):
         print(f'Read dataset {dir_name.name}')
