@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 import argparse
-import os
+import boto3
 import evaluate
+import json
+import os
 import torch
+
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Dataset, Audio
 
@@ -11,16 +14,36 @@ TEST_DIR = 'test/'
 CHUNKS_DIR = 'chunks/'
 OUTPUT_DIR = 'output/'
 DS_DIR = 'ds/'
-MODEL = 'openai/whisper-large-v2'
-
+MODEL = 'openai/whisper-tiny'
 TRANSCRIPTION_FILE_FORMAT = 'txt'
+PROGRESS_FILE=os.path.join(OUTPUT_DIR, 'progress.json')
+
+s3 = boto3.resource('s3')
 
 parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
+parser.add_argument('-ab', '--aws_bucket_name', default=None,
+                    help='''Use AWS bucket as input and output (instead of local dir). You need to setup proper
+                    credentials using `aws configure` or allow machine to connect to S3 bucket without credentials.
+                    In bucket there should be encrypted .zip files, that contains datasets for each file.
+                    Script will download one by time, unpack it and process. Result will be pushed to S3 bucket in
+                    folder with the same name as dataset.
+                    Inside will be parts of transcription (to save long-processing data).
+                    If you used password, set `--aws_bucket_files_password` also''')
+parser.add_argument('-abp', '--aws_bucket_files_password', default=None,
+                    help='''If set the script will decrypt zip files from bucket with this password.
+                    Also all transcriptions will be encrypted with this ''')
 parser.add_argument('-b', '--benchmark', action='store_true',
                     help='If set the script will only benchmark model(s) based on test dataset(s)')
 parser.add_argument('-m', '--model', default=MODEL,
-                    help='Set the custom model to use')
+                    help=f'Set the custom whishper model to use. Defaults to {MODEL}')
 args = parser.parse_args()
+
+aws_bucket_name = args.aws_bucket_name
+if aws_bucket_name is not None:
+    is_source_aws = True
+    aws_bucket = s3.Bucket(aws_bucket_name)
+else:
+    is_source_aws = False
 
 is_only_benchmark = args.benchmark
 model_name = args.model
@@ -88,12 +111,23 @@ def generate_transcript(processor, model):
     """Generate transcript for input datasets."""
     print(f'Generating transcript based on model {model_name}')
     init_output_dir(OUTPUT_DIR)
-    for dir_name in os.scandir(os.path.join(INPUT_DIR, DS_DIR)):
-        print(f'Read dataset {dir_name.name}')
-        ds = Dataset.load_from_disk(dir_name.path)
+    dataset_list = get_dataset_list()
+    for dir_name in dataset_list:
+        print(f'Read dataset "{dir_name.name}"')
+        progress_of_ds = check_dataset_progress(dir_name.name)
+        current_chunk = progress_of_ds['current_chunk']
+        if progress_of_ds['processed']:
+            print(f'Dataset "{dir_name.name}" already processed. Skipping')
+            continue
+        elif current_chunk > 0:
+            print(f'Resume processing dataset "{dir_name.name}" at chunk {current_chunk}')
+        else:
+            print(f'Start transcription of dataset "{dir_name.name}"')
+
+        exit(127)
+        ds = load_dataset(dir_name)
 
         total_length = 0
-        output_text=[]
         output_file_name = os.path.join(OUTPUT_DIR, f'{dir_name.name}.{TRANSCRIPTION_FILE_FORMAT}')
         with open(output_file_name, 'w') as file:
             for i, d in enumerate(ds):
@@ -105,6 +139,70 @@ def generate_transcript(processor, model):
                 prediction_text = process_sample(d['audio'], processor, model)
                 file.write(prediction_text + '\n')
                 file.flush()
+
+
+def get_dataset_list():
+    """Return list of datasets based on source - localhost or AWS."""
+    result = []
+    if is_source_aws:
+        for obj in aws_bucket.objects.all():
+            print(obj.key)
+            result.append(obj.key)
+    else:
+        result = os.scandir(os.path.join(INPUT_DIR, DS_DIR))
+    return result
+
+
+def check_dataset_progress(dataset_name):
+    """Check progress of given dataset in progress file."""
+    started_datasets = []
+    processed_datasets = []
+    fresh_ds_entry = {'ds_name': dataset_name, 'processed': False, 'current_chunk': 0}
+    try:
+        download_file_from_aws(PROGRESS_FILE)
+        with open(PROGRESS_FILE, 'r') as file:
+            progress = json.load(file)
+        print(progress)
+        started_datasets = progress['started_datasets']
+        processed_datasets = progress['processed_datasets']
+        for d in started_datasets:
+            if dataset_name == d['ds_name']:
+                return d
+        for d in processed_datasets:
+            if dataset_name == d['ds_name']:
+                return d
+
+    except FileNotFoundError:
+        print('No progress file. Set empty one')
+
+    started_datasets.append(fresh_ds_entry)
+    with open(PROGRESS_FILE, 'w') as file:
+        file.write(json.dumps({'started_datasets': started_datasets, 'processed_datasets': processed_datasets}))
+    upload_file_from_aws(PROGRESS_FILE)
+
+    return fresh_ds_entry
+
+
+def download_file_from_aws(file_name):
+    """Download file from AWS if it is used."""
+    if is_source_aws:
+        pass
+
+
+def upload_file_from_aws(file_name):
+    """Upload file to AWS if it is used."""
+    if is_source_aws:
+        pass
+
+
+def load_dataset(dir_name):
+    """Load dataset from local storage. If needed download it from AWS."""
+    result = None
+    if is_source_aws:
+        pass
+    else:
+        result = Dataset.load_from_disk(dir_name.path)
+    return result
 
 
 def init_output_dir(dir_path):

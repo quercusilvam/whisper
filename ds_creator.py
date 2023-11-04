@@ -90,9 +90,9 @@ def process_audio_file(audio_file):
     create_and_save_ds(chunks_dict_list, ds_file_dir)
 
 
-def load_audio_file(path, frame_rate=WHISPER_SAMPLING):
+def load_audio_file(path, frame_rate=WHISPER_SAMPLING, file_format=AUDIO_FILE_FORMAT):
     """Load audio file from path and return AudioSegment with set frame_rate"""
-    audio_file = AudioSegment.from_mp3(path)
+    audio_file = AudioSegment.from_file(path, file_format)
     audio_file = audio_file.set_frame_rate(frame_rate)
     return audio_file
 
