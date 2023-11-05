@@ -6,6 +6,7 @@ import json
 import os
 import torch
 
+from whisperProgressLogger import WhisperProgressLogger
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Dataset, Audio
 
@@ -17,6 +18,7 @@ DS_DIR = 'ds/'
 MODEL = 'openai/whisper-tiny'
 TRANSCRIPTION_FILE_FORMAT = 'txt'
 PROGRESS_FILE=os.path.join(OUTPUT_DIR, 'progress.json')
+progress_file_data=''
 
 s3 = boto3.resource('s3')
 
@@ -112,33 +114,42 @@ def generate_transcript(processor, model):
     print(f'Generating transcript based on model {model_name}')
     init_output_dir(OUTPUT_DIR)
     dataset_list = get_dataset_list()
+    progress = WhisperProgressLogger(OUTPUT_DIR, is_source_aws=is_source_aws)
     for dir_name in dataset_list:
-        print(f'Read dataset "{dir_name.name}"')
-        progress_of_ds = check_dataset_progress(dir_name.name)
-        current_chunk = progress_of_ds['current_chunk']
-        if progress_of_ds['processed']:
-            print(f'Dataset "{dir_name.name}" already processed. Skipping')
+        ds_name = dir_name.name
+        print(f'Read dataset "{ds_name}"')
+        progress.check_dataset_progress(ds_name)
+        if progress.is_dataset_processed():
+            print(f'Dataset "{ds_name}" already processed. Skipping')
             continue
-        elif current_chunk > 0:
-            print(f'Resume processing dataset "{dir_name.name}" at chunk {current_chunk}')
-        else:
-            print(f'Start transcription of dataset "{dir_name.name}"')
 
-        exit(127)
+        last_processed_chunk = progress.get_dataset_last_processed_chunk()
+        current_length = progress.get_dataset_total_processed_length()
+        if last_processed_chunk >= 0:
+            print(f'Resume processing dataset "{ds_name}" at chunk {last_processed_chunk}')
+        else:
+            print(f'Start transcription of dataset "{ds_name}"')
+
         ds = load_dataset(dir_name)
 
-        total_length = 0
-        output_file_name = os.path.join(OUTPUT_DIR, f'{dir_name.name}.{TRANSCRIPTION_FILE_FORMAT}')
+        output_file_name = os.path.join(OUTPUT_DIR, f'{ds_name}.{TRANSCRIPTION_FILE_FORMAT}')
         with open(output_file_name, 'w') as file:
             for i, d in enumerate(ds):
-                l = d['len']
-                time_mark = f'{microseconds_to_audio_timestamp(total_length)} -> {microseconds_to_audio_timestamp(total_length + l)}'
-                print(time_mark)
-                file.write(time_mark + '\n')
-                total_length += l
-                prediction_text = process_sample(d['audio'], processor, model)
-                file.write(prediction_text + '\n')
-                file.flush()
+                if i <= last_processed_chunk:
+                    print('Chunk already processed. Skip')
+                    continue
+                else:
+                    l = d['len']
+                    time_mark = f'{microseconds_to_audio_timestamp(current_length)} -> {microseconds_to_audio_timestamp(current_length + l)}'
+                    print(time_mark)
+                    file.write(time_mark + '\n')
+                    current_length += l
+                    prediction_text = process_sample(d['audio'], processor, model)
+                    file.write(prediction_text + '\n')
+                    file.flush()
+                    progress.update_dataset_progress(i, current_length)
+
+        progress.mark_dataset_as_processed()
 
 
 def get_dataset_list():
@@ -153,43 +164,13 @@ def get_dataset_list():
     return result
 
 
-def check_dataset_progress(dataset_name):
-    """Check progress of given dataset in progress file."""
-    started_datasets = []
-    processed_datasets = []
-    fresh_ds_entry = {'ds_name': dataset_name, 'processed': False, 'current_chunk': 0}
-    try:
-        download_file_from_aws(PROGRESS_FILE)
-        with open(PROGRESS_FILE, 'r') as file:
-            progress = json.load(file)
-        print(progress)
-        started_datasets = progress['started_datasets']
-        processed_datasets = progress['processed_datasets']
-        for d in started_datasets:
-            if dataset_name == d['ds_name']:
-                return d
-        for d in processed_datasets:
-            if dataset_name == d['ds_name']:
-                return d
-
-    except FileNotFoundError:
-        print('No progress file. Set empty one')
-
-    started_datasets.append(fresh_ds_entry)
-    with open(PROGRESS_FILE, 'w') as file:
-        file.write(json.dumps({'started_datasets': started_datasets, 'processed_datasets': processed_datasets}))
-    upload_file_from_aws(PROGRESS_FILE)
-
-    return fresh_ds_entry
-
-
 def download_file_from_aws(file_name):
     """Download file from AWS if it is used."""
     if is_source_aws:
         pass
 
 
-def upload_file_from_aws(file_name):
+def upload_file_to_aws(file_name):
     """Upload file to AWS if it is used."""
     if is_source_aws:
         pass
