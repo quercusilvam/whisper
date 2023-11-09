@@ -73,6 +73,8 @@ class WhisperCryptoHelper:
             encrypted_data = self.fernet.encrypt(file.read())
         with open(crypt_filepath, 'wb') as file:
             file.write(encrypted_data)
+
+        Path(zippath).unlink()
         return crypt_filepath
 
     def decrypt_and_unzip(self, filepath, dst_dir=None):
@@ -84,7 +86,6 @@ class WhisperCryptoHelper:
         with open(decrypt_filepath, 'wb') as file:
             file.write(decrypted_data)
 
-        return self._unzip(decrypt_filepath, dest_dir=dst_dir)
-
-test = WhisperCryptoHelper('fkey.key')
-print(test.decrypt_and_unzip('dst/zipdir.zip.crypt'))
+        files = self._unzip(decrypt_filepath, dest_dir=dst_dir)
+        Path(decrypt_filepath).unlink()
+        return files

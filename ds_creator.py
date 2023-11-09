@@ -5,11 +5,11 @@
 import os
 import argparse
 
-
 from datasets import Dataset, Audio
 from pathlib import Path
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
+from whisperCryptoHelper import WhisperCryptoHelper
 
 MIN_SILENCE_LEN = 500
 SILENCE_THRESHOLD = -50
@@ -26,6 +26,8 @@ TEST_DIR = 'test/'
 
 
 parser = argparse.ArgumentParser(description='Create Huggingface DS from audio files that can be used by whisper')
+parser.add_argument('-e', '--encrypt', default=None,
+                    help='If set the script will encrypt output datasets using given file as key')
 parser.add_argument('-ni', '--no_input', action='store_true',
                     help='If set the script will not create audio_chunks from "input" dir')
 parser.add_argument('-t', '--create_test', action='store_true',
@@ -34,6 +36,9 @@ parser.add_argument('-v', '--verification', action='store_true',
                     help='Verify the created DSes')
 args = parser.parse_args()
 
+encrypt_file = args.encrypt
+if encrypt_file:
+    is_encrypt = True
 is_create_ds_from_input = not args.no_input
 is_create_test_ds = args.create_test
 is_verify_created_ds = args.verification
@@ -54,6 +59,7 @@ def create_and_verify_ds():
             filename = Path(f.name).stem
             process_audio_file(filename)
             verify_ds(os.path.join(OUTPUT_DIR, CHUNK_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR, filename), filename)
+            encrypt_out_ds(os.path.join(OUTPUT_DIR, DS_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR))
     else:
         print(f'Processing of file {INPUT_DIR} skipped')
 
@@ -66,6 +72,7 @@ def create_and_verify_test_ds():
             dirname = test_dir.name
             process_test_dir(dirname)
             verify_ds(os.path.join(TEST_DIR, CHUNK_DIR, dirname), os.path.join(TEST_DIR, DS_DIR, dirname), dirname)
+            encrypt_out_ds(os.path.join(TEST_DIR, DS_DIR, dirname), os.path.join(TEST_DIR, DS_DIR))
     else:
         print(f'Create of test DS for {TEST_DIR} skipped')
 
@@ -279,6 +286,17 @@ def compare_dataset_with_audio_chunks(ds, audio_chunks):
             print('  With audio_chunk {}'.format(audio_chunks[i]))
             print('  [ERROR] - dataset len {0} is not equal audio chunk len {1}'.format(d_len, ac_len))
     print('[OK]')
+
+
+def encrypt_out_ds(dataset_path, dest_dir=None):
+    """Encrypt created dataset files."""
+    if is_encrypt:
+        print(f'Encrypt dataset {dataset_path}')
+        wch = WhisperCryptoHelper(encrypt_file)
+        crypt_file = wch.encrypt_and_zip(dataset_path, dest_dir)
+        print(f'  Created encrypted file {crypt_file}')
+    else:
+        print(f'Skip encryption {dataset_path}')
 
 
 main()
