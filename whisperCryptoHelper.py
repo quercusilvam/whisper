@@ -10,6 +10,8 @@ from pathlib import Path
 
 class WhisperCryptoHelper:
     """Zip and encrypt given files or folders"""
+    _crypt_file_extension = '.crypt'
+    _zip_file_extension = '.zip'
 
     def __init__(self, key_file_path):
         """Use given key file to encrypt/decrypt data.
@@ -37,7 +39,7 @@ class WhisperCryptoHelper:
         :return: path to zipfile
         """
         if zipname is None:
-            zipname = Path(path).stem + '.zip'
+            zipname = Path(path).stem + self._zip_file_extension
         if dest_dir:
             zipname = os.path.join(dest_dir, Path(zipname).name)
 
@@ -68,7 +70,7 @@ class WhisperCryptoHelper:
     def encrypt_and_zip(self, path, dst_dir=None):
         """Zip and encrypt given file/dir with provided key."""
         zippath = self._zip(path, dest_dir=dst_dir)
-        crypt_filepath = zippath + '.crypt'
+        crypt_filepath = zippath + self._crypt_file_extension
         with open(zippath, 'rb') as file:
             encrypted_data = self.fernet.encrypt(file.read())
         with open(crypt_filepath, 'wb') as file:
@@ -89,3 +91,15 @@ class WhisperCryptoHelper:
         files = self._unzip(decrypt_filepath, dest_dir=dst_dir)
         Path(decrypt_filepath).unlink()
         return files
+
+    def get_crypt_file_extension(self):
+        """Return extension added to encrypt files."""
+        return self._crypt_file_extension
+
+    def get_zip_file_extension(self):
+        """Return extension added to zipped files."""
+        return self._zip_file_extension
+
+    def get_zip_crypt_file_extension(self):
+        """Return extension added to zipped files."""
+        return self._zip_file_extension + self._crypt_file_extension
