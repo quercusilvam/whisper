@@ -3,8 +3,10 @@
 import json
 import os
 
+from whisperAWSHelper import WhisperAWSHelper
 
-class WhisperProgressLogger():
+
+class WhisperProgressLogger:
     """Log progress of converting audio to text.
 
     Allow resuming transcription from saved moment, not from beginning.
@@ -20,20 +22,26 @@ class WhisperProgressLogger():
     _json_total_processed_length_new_entry = 0
     _json_ds_processed_label = 'processed'
 
-    def __init__(self, output_dir_path, is_source_aws=False):
-        """Set output dir path. If source is AWS, download files from there"""
-        self.output_dir_path = output_dir_path
-        self.progress_file_path = os.path.join(output_dir_path, self._progress_filename)
+    def __init__(self, progress_filepath=None, whisperAWSHelper=None):
+        """Set progress filepath. If whisperAWSHelper is given, download file from there."""
         self.progress_file_data = {}
         self.progress_current_ds_data = {}
-        self.is_source_aws = is_source_aws
+        if progress_filepath:
+            self.progress_filepath = progress_filepath
+        else:
+            self.progress_filepath = self._progress_filename
+        if whisperAWSHelper:
+            self.wah = whisperAWSHelper
+            self.is_source_aws = True
+        else:
+            self.is_source_aws = False
         self._read_progress_file()
 
     def _read_progress_file(self):
         """Read content of the progress file into memory."""
         self._download_file_from_aws()
         try:
-            with open(self.progress_file_path, 'r') as file:
+            with open(self.progress_filepath, 'r') as file:
                 self.progress_file_data = json.load(file)
         except FileNotFoundError:
             print('No progress file. Set empty one')
@@ -42,18 +50,19 @@ class WhisperProgressLogger():
 
     def _write_progress_file(self):
         """Write updated data to progress file"""
-        with open(self.progress_file_path, 'w') as file:
+        with open(self.progress_filepath, 'w') as file:
             file.writelines(json.dumps(self.progress_file_data, sort_keys=False, indent=1))
+        self._upload_file_to_aws()
 
     def _download_file_from_aws(self):
         """Download progress file from AWS (if set)"""
         if self.is_source_aws:
-            pass
+            self.wah.download_from_aws(self.progress_filepath)
 
     def _upload_file_to_aws(self):
         """Upload progress file to AWS (if set)"""
         if self.is_source_aws:
-            pass
+            self.wah.upload_to_aws(self.progress_filepath)
 
     def check_dataset_progress(self, dataset_name):
         """Check progress of given dataset in progress file."""

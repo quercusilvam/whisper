@@ -4,11 +4,14 @@ import boto3
 import evaluate
 import json
 import os
+import shutil
 import torch
 
-from whisperProgressLogger import WhisperProgressLogger
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from datasets import Dataset, Audio
+from transformers import WhisperProcessor, WhisperForConditionalGeneration
+from whisperAWSHelper import WhisperAWSHelper
+from whisperProgressLogger import WhisperProgressLogger
+
 
 INPUT_DIR = 'audio_chunks/'
 TEST_DIR = 'test/'
@@ -17,10 +20,7 @@ OUTPUT_DIR = 'output/'
 DS_DIR = 'ds/'
 MODEL = 'openai/whisper-tiny'
 TRANSCRIPTION_FILE_FORMAT = 'txt'
-PROGRESS_FILE=os.path.join(OUTPUT_DIR, 'progress.json')
-progress_file_data=''
-
-s3 = boto3.resource('s3')
+CRYPT_KEY_FILE = 'fkey.key'
 
 parser = argparse.ArgumentParser(description='Transcript input dataset with audio data to text. Also benchmark models')
 parser.add_argument('-ab', '--aws_bucket_name', default=None,
@@ -29,11 +29,7 @@ parser.add_argument('-ab', '--aws_bucket_name', default=None,
                     In bucket there should be encrypted .zip files, that contains datasets for each file.
                     Script will download one by time, unpack it and process. Result will be pushed to S3 bucket in
                     folder with the same name as dataset.
-                    Inside will be parts of transcription (to save long-processing data).
-                    If you used password, set `--aws_bucket_files_password` also''')
-parser.add_argument('-abp', '--aws_bucket_files_password', default=None,
-                    help='''If set the script will decrypt zip files from bucket with this password.
-                    Also all transcriptions will be encrypted with this ''')
+                    Inside will be parts of transcription (to save long-processing data).''')
 parser.add_argument('-b', '--benchmark', action='store_true',
                     help='If set the script will only benchmark model(s) based on test dataset(s)')
 parser.add_argument('-m', '--model', default=MODEL,
@@ -41,9 +37,9 @@ parser.add_argument('-m', '--model', default=MODEL,
 args = parser.parse_args()
 
 aws_bucket_name = args.aws_bucket_name
-if aws_bucket_name is not None:
+if aws_bucket_name:
     is_source_aws = True
-    aws_bucket = s3.Bucket(aws_bucket_name)
+    wah = WhisperAWSHelper(aws_bucket_name, CRYPT_KEY_FILE)
 else:
     is_source_aws = False
 
@@ -114,7 +110,7 @@ def generate_transcript(processor, model):
     print(f'Generating transcript based on model {model_name}')
     init_output_dir(OUTPUT_DIR)
     dataset_list = get_dataset_list()
-    progress = WhisperProgressLogger(OUTPUT_DIR, is_source_aws=is_source_aws)
+    progress = WhisperProgressLogger(OUTPUT_DIR, wah)
     for dir_name in dataset_list:
         ds_name = dir_name.name
         print(f'Read dataset "{ds_name}"')
@@ -147,20 +143,21 @@ def generate_transcript(processor, model):
                     prediction_text = process_sample(d['audio'], processor, model)
                     file.write(prediction_text + '\n')
                     file.flush()
+                    upload_file_to_aws(output_file_name)
                     progress.update_dataset_progress(i, current_length)
 
         progress.mark_dataset_as_processed()
+        shutil.rmtree(dir_name)
 
 
 def get_dataset_list():
     """Return list of datasets based on source - localhost or AWS."""
     result = []
+    dir_path = os.path.join(INPUT_DIR, DS_DIR)
     if is_source_aws:
-        for obj in aws_bucket.objects.all():
-            print(obj.key)
-            result.append(obj.key)
+        result = wah.get_list_of_available_objects_in_dir(dir_path)
     else:
-        result = os.scandir(os.path.join(INPUT_DIR, DS_DIR))
+        result = os.scandir(dir_path)
     return result
 
 
@@ -173,17 +170,14 @@ def download_file_from_aws(file_name):
 def upload_file_to_aws(file_name):
     """Upload file to AWS if it is used."""
     if is_source_aws:
-        pass
+        wah.upload_to_aws(file_name)
 
 
 def load_dataset(dir_name):
     """Load dataset from local storage. If needed download it from AWS."""
-    result = None
     if is_source_aws:
-        pass
-    else:
-        result = Dataset.load_from_disk(dir_name.path)
-    return result
+        wah.download_from_aws(dir_name)
+    return Dataset.load_from_disk(dir_name.path)
 
 
 def init_output_dir(dir_path):
