@@ -8,6 +8,7 @@ import shutil
 import torch
 
 from datasets import Dataset, Audio
+from pathlib import Path
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 from whisperAWSHelper import WhisperAWSHelper
 from whisperProgressLogger import WhisperProgressLogger
@@ -110,9 +111,11 @@ def generate_transcript(processor, model):
     print(f'Generating transcript based on model {model_name}')
     init_output_dir(OUTPUT_DIR)
     dataset_list = get_dataset_list()
-    progress = WhisperProgressLogger(OUTPUT_DIR, wah)
-    for dir_name in dataset_list:
-        ds_name = dir_name.name
+    print(dataset_list)
+    progress = WhisperProgressLogger(whisperAWSHelper=wah)
+    for dir_path in dataset_list:
+        dir_path = Path(dir_path)
+        ds_name = dir_path.name
         print(f'Read dataset "{ds_name}"')
         progress.check_dataset_progress(ds_name)
         if progress.is_dataset_processed():
@@ -126,7 +129,7 @@ def generate_transcript(processor, model):
         else:
             print(f'Start transcription of dataset "{ds_name}"')
 
-        ds = load_dataset(dir_name)
+        ds = load_dataset(dir_path)
 
         output_file_name = os.path.join(OUTPUT_DIR, f'{ds_name}.{TRANSCRIPTION_FILE_FORMAT}')
         with open(output_file_name, 'w') as file:
@@ -147,7 +150,7 @@ def generate_transcript(processor, model):
                     progress.update_dataset_progress(i, current_length)
 
         progress.mark_dataset_as_processed()
-        shutil.rmtree(dir_name)
+        shutil.rmtree(dir_path)
 
 
 def get_dataset_list():
@@ -161,23 +164,17 @@ def get_dataset_list():
     return result
 
 
-def download_file_from_aws(file_name):
-    """Download file from AWS if it is used."""
-    if is_source_aws:
-        pass
-
-
 def upload_file_to_aws(file_name):
     """Upload file to AWS if it is used."""
     if is_source_aws:
         wah.upload_to_aws(file_name)
 
 
-def load_dataset(dir_name):
+def load_dataset(dir_path):
     """Load dataset from local storage. If needed download it from AWS."""
     if is_source_aws:
-        wah.download_from_aws(dir_name)
-    return Dataset.load_from_disk(dir_name.path)
+        wah.download_from_aws(dir_path)
+    return Dataset.load_from_disk(dir_path)
 
 
 def init_output_dir(dir_path):

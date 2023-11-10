@@ -92,14 +92,10 @@ class WhisperCryptoHelper:
         Path(decrypt_filepath).unlink()
         return files
 
-    def get_crypt_file_extension(self):
-        """Return extension added to encrypt files."""
-        return self._crypt_file_extension
+    def add_file_extension(self, filepath):
+        """Return filepath with extension added to zipped & encrypted files."""
+        return filepath + self._zip_file_extension + self._crypt_file_extension
 
-    def get_zip_file_extension(self):
-        """Return extension added to zipped files."""
-        return self._zip_file_extension
-
-    def get_zip_crypt_file_extension(self):
-        """Return extension added to zipped files."""
-        return self._zip_file_extension + self._crypt_file_extension
+    def remove_file_extension(self, filepath):
+        """Return filepath with extension removed."""
+        return os.path.join(Path(filepath).parent, Path(Path(filepath).stem).stem)

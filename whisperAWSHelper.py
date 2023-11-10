@@ -36,7 +36,7 @@ class WhisperAWSHelper:
         dir_path = os.path.join(dir_path, '')
         for obj in self.aws_bucket.objects.filter(Delimiter='/', Prefix=dir_path):
             if obj.key != dir_path:
-                result.append(obj.key)
+                result.append(self.wch.remove_file_extension(obj.key))
         return result
 
     def download_from_aws(self, filepath, dest_dir=None):
@@ -45,16 +45,18 @@ class WhisperAWSHelper:
         parent = Path(filepath).parent
         if parent != '.':
             stem_fullpath = os.path.join(Path(filepath).parent, Path(filepath).stem)
+            if dest_dir is None:
+                dest_dir = Path(filepath).parent
         else:
             stem_fullpath = Path(filepath).stem
-        s3_filepath = stem_fullpath + self.wch.get_zip_crypt_file_extension()
+        s3_filepath = self.wch.add_file_extension(stem_fullpath)
 
         if self.check_if_object_exists_in_bucket(s3_filepath):
             filename = Path(filepath).name
             if dest_dir:
                 crypt_fn = os.path.join(dest_dir, filename)
             else:
-                crypt_fn = filename
+                crypt_fn = filepath
 
             self.aws_bucket.download_file(s3_filepath, crypt_fn)
             result = self.wch.decrypt_and_unzip(crypt_fn, dest_dir)
