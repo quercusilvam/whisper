@@ -43,20 +43,21 @@ class WhisperAWSHelper:
         """Download selected file from AWS"""
         result = None
         parent = Path(filepath).parent
-        if parent != '.':
-            stem_fullpath = os.path.join(Path(filepath).parent, Path(filepath).stem)
+        # if filepath contains directories
+        if parent.name != '':
+            name_fullpath = os.path.join(Path(filepath).parent, Path(filepath).name)
             if dest_dir is None:
                 dest_dir = Path(filepath).parent
         else:
-            stem_fullpath = Path(filepath).stem
-        s3_filepath = self.wch.add_file_extension(stem_fullpath)
+            name_fullpath = Path(filepath).name
+        s3_filepath = self.wch.add_file_extension(name_fullpath)
 
         if self.check_if_object_exists_in_bucket(s3_filepath):
-            filename = Path(filepath).name
+            filename = Path(s3_filepath).name
             if dest_dir:
                 crypt_fn = os.path.join(dest_dir, filename)
             else:
-                crypt_fn = filepath
+                crypt_fn = s3_filepath
 
             self.aws_bucket.download_file(s3_filepath, crypt_fn)
             result = self.wch.decrypt_and_unzip(crypt_fn, dest_dir)
@@ -71,7 +72,7 @@ class WhisperAWSHelper:
             s3_filepath = os.path.join(dest_s3_dir, s3_filename)
         else:
             parent = Path(filepath).parent
-            if os.path.isdir(parent):
+            if parent.name != '' and os.path.isdir(parent):
                 s3_filepath = os.path.join(parent, s3_filename)
             else:
                 s3_filepath = s3_filename
