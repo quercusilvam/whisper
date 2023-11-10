@@ -39,6 +39,8 @@ args = parser.parse_args()
 encrypt_file = args.encrypt
 if encrypt_file:
     is_encrypt = True
+else:
+    is_encrypt = False
 is_create_ds_from_input = not args.no_input
 is_create_test_ds = args.create_test
 is_verify_created_ds = args.verification

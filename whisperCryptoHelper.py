@@ -39,7 +39,10 @@ class WhisperCryptoHelper:
         :return: path to zipfile
         """
         if zipname is None:
-            zipname = Path(path).stem + self._zip_file_extension
+            if os.path.isfile(path):
+                zipname = Path(path).stem + self._zip_file_extension
+            else:
+                zipname = Path(path).name + self._zip_file_extension
         if dest_dir:
             zipname = os.path.join(dest_dir, Path(zipname).name)
 
