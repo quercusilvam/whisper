@@ -50,7 +50,7 @@ class WhisperProgressLogger:
 
     def _write_progress_file(self):
         """Write updated data to progress file"""
-        with open(self.progress_filepath, 'w') as file:
+        with open(self.progress_filepath, 'w', encoding='utf-8') as file:
             file.writelines(json.dumps(self.progress_file_data, sort_keys=False, indent=1))
         self._upload_file_to_aws()
 
