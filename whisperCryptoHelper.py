@@ -43,9 +43,9 @@ class WhisperCryptoHelper:
         if dest_dir:
             zipname = os.path.join(dest_dir, Path(zipname).name)
 
-        with zipfile.ZipFile(zipname, 'w') as zip_ref:
+        with zipfile.ZipFile(zipname, 'w', zipfile.ZIP_DEFLATED) as zip_ref:
             if os.path.isfile(path):
-                zip_ref.write(path)
+                zip_ref.write(path, Path(path).name)
             elif os.path.isdir(path):
                 for root, dirs, files in os.walk(path):
                     for file in files:
@@ -57,6 +57,7 @@ class WhisperCryptoHelper:
 
     def _unzip(self, filepath, dest_dir=None):
         """Unzip given file."""
+        # print(f'_unzip filepath={filepath}, dest_dir={dest_dir},')
         result = []
         if dest_dir:
             os.makedirs(dest_dir, exist_ok=True)
@@ -84,7 +85,7 @@ class WhisperCryptoHelper:
 
     def decrypt_and_unzip(self, filepath, dst_dir=None):
         """Decrypt the given file with provided key, then unzip"""
-        decrypt_filepath = filepath + self._zip_file_extension
+        decrypt_filepath = os.path.join(Path(filepath).parent, Path(filepath).stem)
         with open(filepath, 'rb') as file:
             encrypted_data = file.read()
         decrypted_data = self.fernet.decrypt(encrypted_data)

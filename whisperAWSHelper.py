@@ -42,6 +42,7 @@ class WhisperAWSHelper:
     def download_from_aws(self, filepath, dest_dir=None):
         """Download selected file from AWS"""
         result = None
+        # print(f'download_from_aws filepath={filepath} dest_dir={dest_dir},')
         parent = Path(filepath).parent
         # if filepath contains directories
         if parent.name != '':
@@ -58,7 +59,7 @@ class WhisperAWSHelper:
                 crypt_fn = os.path.join(dest_dir, filename)
             else:
                 crypt_fn = s3_filepath
-
+            # print(f'Downloading file={s3_filepath} to={crypt_fn},')
             self.aws_bucket.download_file(s3_filepath, crypt_fn)
             result = self.wch.decrypt_and_unzip(crypt_fn, dest_dir)
 
@@ -66,6 +67,7 @@ class WhisperAWSHelper:
 
     def upload_to_aws(self, filepath, tmp_dir=None, dest_s3_dir=None):
         """Upload selected file to AWS"""
+        # print(f'upload_to_aws filepath={filepath}, tmp_dir={tmp_dir} dest_s3_dir={dest_s3_dir},')
         crypt_file = self.wch.encrypt_and_zip(filepath, tmp_dir)
         s3_filename = Path(crypt_file).name
         if dest_s3_dir:

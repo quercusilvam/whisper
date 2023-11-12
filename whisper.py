@@ -124,15 +124,16 @@ def generate_transcript(processor, model):
 
         last_processed_chunk = progress.get_dataset_last_processed_chunk()
         current_length = progress.get_dataset_total_processed_length()
+        output_file_name = os.path.join(OUTPUT_DIR, f'{ds_name}.{TRANSCRIPTION_FILE_FORMAT}')
         if last_processed_chunk >= 0:
-            print(f'Resume processing dataset "{ds_name}" at chunk {last_processed_chunk}')
+            print(f'Resume processing dataset "{ds_name}" after chunk {last_processed_chunk}')
+            download_partial_transcription(output_file_name)
         else:
             print(f'Start transcription of dataset "{ds_name}"')
 
         ds = load_dataset(dir_path)
 
-        output_file_name = os.path.join(OUTPUT_DIR, f'{ds_name}.{TRANSCRIPTION_FILE_FORMAT}')
-        with open(output_file_name, 'w') as file:
+        with open(output_file_name, 'a', encoding='utf-8') as file:
             for i, d in enumerate(ds):
                 if i <= last_processed_chunk:
                     print('Chunk already processed. Skip')
@@ -164,10 +165,12 @@ def get_dataset_list():
     return result
 
 
-def upload_file_to_aws(file_name):
+def upload_file_to_aws(file_name, temp_dir=None):
     """Upload file to AWS if it is used."""
+    if temp_dir is None:
+        temp_dir = Path(file_name).parent
     if is_source_aws:
-        wah.upload_to_aws(file_name)
+        wah.upload_to_aws(file_name, temp_dir)
 
 
 def load_dataset(dir_path):
@@ -175,6 +178,12 @@ def load_dataset(dir_path):
     if is_source_aws:
         wah.download_from_aws(dir_path)
     return Dataset.load_from_disk(dir_path)
+
+
+def download_partial_transcription(file_path):
+    """If transcription is in AWS, download already created file and add new text to it."""
+    if is_source_aws:
+        wah.download_from_aws(file_path)
 
 
 def init_output_dir(dir_path):
