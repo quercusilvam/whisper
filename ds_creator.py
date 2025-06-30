@@ -1,11 +1,12 @@
-#!/usr/bin/env python3
+#!/usr/target/env python3
 
 # This script get audio file from INPUT_DIR and split it to chunks. Then save output as Huggingface Dataset
 
 import os
 import argparse
+import shutil
 
-from datasets import Dataset, Audio
+from datasets import Dataset
 from pathlib import Path
 from pydub import AudioSegment
 from pydub.silence import split_on_silence
@@ -16,7 +17,7 @@ SILENCE_THRESHOLD = -50
 MAX_CHUNK_LENGTH = 30 * 1000
 WHISPER_SAMPLING = 16000
 
-AUDIO_FILE_FORMAT = 'mp3'
+AUDIO_FILE_FORMAT = 'wav'
 TRANSCRIPTION_FILE_FORMAT = 'txt'
 INPUT_DIR = 'input/'
 OUTPUT_DIR = 'audio_chunks/'
@@ -55,13 +56,13 @@ def main():
 def create_and_verify_ds():
     """Process audio files, create DS based on them and verify it integrity."""
     if is_create_ds_from_input:
-        files = Path(INPUT_DIR).glob(f'*.{AUDIO_FILE_FORMAT}')
-        for f in list(files):
-            print(f'Processing file {f.name}')
-            filename = Path(f.name).stem
-            process_audio_file(filename)
-            verify_ds(os.path.join(OUTPUT_DIR, CHUNK_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR, filename), filename)
-            encrypt_out_ds(os.path.join(OUTPUT_DIR, DS_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR))
+        for l in os.scandir(INPUT_DIR):
+            if os.path.isfile(l):
+                print(f'Processing file {l.name}')
+                filename = Path(l.name).stem
+                process_audio_file(l.name)
+                verify_ds(os.path.join(OUTPUT_DIR, CHUNK_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR, filename), filename)
+                encrypt_out_ds(os.path.join(OUTPUT_DIR, DS_DIR, filename), os.path.join(OUTPUT_DIR, DS_DIR))
     else:
         print(f'Processing of file {INPUT_DIR} skipped')
 
@@ -81,14 +82,17 @@ def create_and_verify_test_ds():
 
 def process_audio_file(audio_file):
     """Convert audio files to chunks and dataset"""
-    audio = load_audio_file(f'{INPUT_DIR}{audio_file}.{AUDIO_FILE_FORMAT}')
+    audio = load_audio_file(f'{INPUT_DIR}{audio_file}')
 
     print(f'  Create chunks as long as possible')
-    audio_chunks = generate_audio_chunks(audio)
+    # audio_chunks = generate_audio_chunks(audio)
+    audio_chunks = [ audio ]
 
     print(f'  Init output dir')
-    chunk_file_dir = os.path.join(OUTPUT_DIR, CHUNK_DIR, audio_file)
-    ds_file_dir = os.path.join(OUTPUT_DIR, DS_DIR, audio_file)
+
+    dirname = Path(audio_file).stem
+    chunk_file_dir = os.path.join(OUTPUT_DIR, CHUNK_DIR, dirname)
+    ds_file_dir = os.path.join(OUTPUT_DIR, DS_DIR, dirname)
     init_output_dir(chunk_file_dir)
     init_output_dir(ds_file_dir)
 
@@ -96,13 +100,12 @@ def process_audio_file(audio_file):
     print(f'  Save chunks')
     chunks_dict_list = save_audio_chunks(audio_chunks, chunk_file_dir)
     print(f'  Save dataset')
-    create_and_save_ds(chunks_dict_list, ds_file_dir)
+    create_and_save_ds(chunks_dict_list, ds_file_dir, audio_file)
 
 
-def load_audio_file(path, frame_rate=WHISPER_SAMPLING, file_format=AUDIO_FILE_FORMAT):
+def load_audio_file(path):
     """Load audio file from path and return AudioSegment with set frame_rate"""
-    audio_file = AudioSegment.from_file(path, file_format)
-    audio_file = audio_file.set_frame_rate(frame_rate)
+    audio_file = AudioSegment.from_file(path)
     return audio_file
 
 
@@ -172,26 +175,29 @@ def save_audio_chunks(chunks, chunk_dir_path, file_format=AUDIO_FILE_FORMAT):
     """
     output_dict = []
     for i, chunk in enumerate(chunks):
-        output_chunk_fn = chunk_dir_path + '/chunk{:04d}.{}'.format(i, file_format)
+        filename = 'chunk{:04d}.{}'.format(i, file_format)
+        output_chunk_fn = chunk_dir_path + '/' + filename
         chunk.export(output_chunk_fn, format=file_format)
         # final length for file could be different from chunk itself - so we need to read real file
-        output_chunk_len = len(AudioSegment.from_mp3(output_chunk_fn))
+        output_chunk_len = len(AudioSegment.from_file(output_chunk_fn, format=file_format))
         print('    Exported {0}. Len {1}'.format(output_chunk_fn, output_chunk_len))
-        d = {'file': [output_chunk_fn], 'audio': [output_chunk_fn], 'len': [output_chunk_len]}
+        d = {'path': [output_chunk_fn], 'filename': [filename], 'len': [output_chunk_len]}
         output_dict.append(d)
     return output_dict
 
 
-def create_and_save_ds(chunks_dict_list, ds_file_dir):
+def create_and_save_ds(chunks_dict_list, ds_file_dir, audio_file):
     """Create dataset from given list of dicts."""
     output_ds = None
     for i, chunk in enumerate(chunks_dict_list):
-        file = chunk['file']
+        file = chunk['filename'][0]
+        src_path = chunk['path'][0]
         print(f'    Adding {file} to Dataset')
+        shutil.copy(src_path, f'{ds_file_dir}/{file}')
         if i == 0:
-            output_ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
+            output_ds = Dataset.from_dict(chunk)
         else:
-            ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
+            ds = Dataset.from_dict(chunk)
             output_ds = output_ds.add_item(ds[0])
 
     output_ds.save_to_disk(ds_file_dir)
@@ -230,9 +236,9 @@ def create_and_save_test_ds(chunk_dir, ds_file_dir):
             chunk = {**c, **transcriptions[i]}
             print(chunk)
             if i == 0:
-                output_ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
+                output_ds = Dataset.from_dict(chunk)
             else:
-                ds = Dataset.from_dict(chunk).cast_column('audio', Audio())
+                ds = Dataset.from_dict(chunk)
                 output_ds = output_ds.add_item(ds[0])
         output_ds.save_to_disk(ds_file_dir)
     else:
@@ -253,7 +259,7 @@ def read_audio_chunks_from_dir(audio_chunks_dir):
         f = f.__str__()
         # print(f'  Found audio chunk {f}')
         audio_file = AudioSegment.from_mp3(f)
-        d = {'file': [f], 'audio': [f], 'len': [len(audio_file)]}
+        d = {'file': [f], 'len': [len(audio_file)]}
         output_dict.append(d)
     return output_dict
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/target/env python3
 
 import os
 import zipfile
@@ -103,3 +103,13 @@ class WhisperCryptoHelper:
     def remove_file_extension(self, filepath):
         """Return filepath with extension removed."""
         return os.path.join(Path(filepath).parent, Path(Path(filepath).stem).stem)
+
+
+if __name__ == '__main__':
+    tmp = WhisperCryptoHelper('fkey.key')
+    list = os.scandir('output')
+
+    for l in list:
+        if os.path.isfile(l):
+            print (f'unzip {l.name}')
+            tmp.decrypt_and_unzip(l, 'output/decrypted')
